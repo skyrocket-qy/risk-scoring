@@ -4,6 +4,12 @@ from sklearn.ensemble import IsolationForest
 from sklearn.metrics import classification_report
 import matplotlib.pyplot as plt
 import seaborn as sns
+import joblib
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+# Define the path for the trained model
+MODEL_PATH = "isolation_forest_model.joblib"
 
 def gen_user_data():
     # Set seed for reproducibility
@@ -51,6 +57,10 @@ def train(df, columns):
     model = IsolationForest(contamination=0.02, random_state=42)
     model.fit(df[columns])
 
+    # Save the trained model
+    joblib.dump(model, MODEL_PATH)
+    print(f"Model trained and saved to {MODEL_PATH}")
+
     # Compute anomaly scores
     scores = model.decision_function(df[columns])  # higher = more normal
     anomaly_scores = -scores  # flip: higher = more anomalous
@@ -74,6 +84,59 @@ def train(df, columns):
     plt.ylabel('Feature 2 (e.g., Session Duration)')
     plt.show()
 
-if __name__ == "__main__":
-    df, columns = gen_user_data()
-    train(df, columns)
+def load_model():
+    try:
+        model = joblib.load(MODEL_PATH)
+        print(f"Model loaded from {MODEL_PATH}")
+        return model
+    except FileNotFoundError:
+        print(f"Model file not found at {MODEL_PATH}. Please train the model first.")
+        return None
+
+# FastAPI Application
+app = FastAPI()
+
+# Load the model when the application starts
+# In a real-world scenario, you might want to train the model periodically
+# or load a pre-trained model from a persistent storage.
+ml_model = None
+columns_for_prediction = ['feature1', 'feature2', 'feature3', 'feature4']
+
+@app.on_event("startup")
+async def startup_event():
+    global ml_model
+    ml_model = load_model()
+    if ml_model is None:
+        # If model not found, train it
+        print("Training model on startup...")
+        df, columns = gen_user_data()
+        train(df, columns)
+        ml_model = load_model()
+
+class LoginData(BaseModel):
+    feature1: float
+    feature2: float
+    feature3: float
+    feature4: float
+
+@app.post("/predict")
+async def predict_anomaly(data: LoginData):
+    if ml_model is None:
+        return {"error": "Model not loaded. Please ensure the model is trained."}
+
+    # Convert input data to a format suitable for the model
+    input_df = pd.DataFrame([data.model_dump()])
+
+    # Ensure the order of columns matches the training data
+    input_df = input_df[columns_for_prediction]
+
+    # Predict anomaly score
+    scores = ml_model.decision_function(input_df)
+    anomaly_score = -scores[0]  # Higher = more anomalous
+
+    # You can also return a predicted label based on a threshold if needed
+    # For simplicity, we'll just return the anomaly score
+    return {"anomaly_score": anomaly_score}
+
+# To run this FastAPI application, save it as main.py and run:
+# uvicorn main:app --reload --port 8000

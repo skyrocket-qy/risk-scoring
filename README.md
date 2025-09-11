@@ -85,3 +85,15 @@ plt.show()
 * `anomaly_score` represents the risk score: higher means more likely to be abnormal.
 * Threshold can be tuned depending on desired sensitivity.
 * You can replace `IsolationForest` with `OneClassSVM`, `LocalOutlierFactor`, or `Autoencoder` depending on use case.
+
+
+
+## Flow
+
+1. Train all data(including normal and abnormal)
+
+2. Model tell me some data maybe far
+
+3. Admin check, if is abnormal, remove from train data, else keep it
+
+4. model retrain
