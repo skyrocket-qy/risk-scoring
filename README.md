@@ -1,99 +1,76 @@
 # Traditional Risk-Scoring with Unsupervised Model
 
-This is a general example using **unsupervised anomaly detection** for risk scoring with **fake data**.
+This project demonstrates a traditional risk-scoring system using **unsupervised anomaly detection** with **fake data**, served via a FastAPI application.
 
 ---
 
-## 1. Prepare the environment
+## Project Setup and Running
+
+### 1. Prepare the Environment
+
+It's recommended to use a Python virtual environment.
 
 ```bash
-pip install numpy pandas scikit-learn matplotlib seaborn
+python3 -m venv .venv
+source .venv/bin/activate
+pip install "fastapi[standard]" uvicorn joblib numpy pandas scikit-learn matplotlib seaborn
+```
+
+### 2. Train the Model (Initial Setup)
+
+The `main.py` script includes logic to generate synthetic data, train an Isolation Forest model, and save it. If the model file (`isolation_forest_model.joblib`) does not exist when the FastAPI server starts, it will automatically train and save the model.
+
+You can also explicitly run the training and visualization part (without starting the server) by executing:
+
+```bash
+.venv/bin/python main.py
+```
+
+### 3. Run the FastAPI Server
+
+The risk-scoring model is exposed via a FastAPI application.
+
+```bash
+.venv/bin/fastapi run main.py --port 8000 --reload
+```
+
+The server will be accessible at `http://localhost:8000`.
+
+### 4. Test the API Endpoint
+
+Once the server is running, you can send a POST request to the `/predict` endpoint to get an anomaly score.
+
+Example using `curl`:
+
+```bash
+curl -X POST "http://localhost:8000/predict" -H "Content-Type: application/json" -d '{
+  "feature1": 55.0,
+  "feature2": 32.0,
+  "feature3": 1.0,
+  "feature4": 0.5
+}'
 ```
 
 ---
 
-## 2. Generate fake data
+## Model and Approach
 
-```python
-# user id, role, group, ip, city, region, device gingerprint, time of login, login method, mfa used, 
-# login freq, session duration, failed login attempt, login velocity, new device or ip, 
-# vpn/proxy use, ASN/ISP, browser or OS anomalies
-# Distance from last login location, Time delta from usual login hours, Device churn
-# IP risk score, Embedding of login context
-import numpy as np
-import pandas as pd
+This project uses an **Isolation Forest** model for unsupervised anomaly detection.
 
-# Set seed for reproducibility
-np.random.seed(42)
-```
+*   `IsolationForest` is unsupervised: it does not use `label` for training.
+*   `anomaly_score` represents the risk score: higher means more likely to be abnormal.
+*   Threshold for labeling anomalies can be tuned depending on desired sensitivity.
+*   Other unsupervised models like `OneClassSVM`, `LocalOutlierFactor`, or `Autoencoder` could also be used.
 
 ---
 
-## 3. Train an unsupervised models
+## Iterative Training Flow (Human-in-the-Loop)
 
-```python
-from sklearn.ensemble import IsolationForest
+This project incorporates a human-in-the-loop approach for continuous model improvement:
 
-# Train Isolation Forest
-model = IsolationForest(contamination=0.02, random_state=42)
-model.fit(df[columns])
-
-# Compute anomaly scores
-scores = model.decision_function(df[columns])  # higher = more normal
-anomaly_scores = -scores  # flip: higher = more anomalous
-
-df['anomaly_score'] = anomaly_scores
-```
-
----
-
-## 4. Set a threshold and label anomalies
-
-```python
-threshold = np.percentile(anomaly_scores, 98)  # top 2% most anomalous
-df['predicted_label'] = (anomaly_scores > threshold).astype(int)
-```
-
----
-
-## 5. Evaluate results
-
-```python
-from sklearn.metrics import classification_report
-
-print(classification_report(df['label'], df['predicted_label']))
-```
-
----
-
-## 6. Visualize
-
-```python
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-sns.scatterplot(x='feature1', y='feature2', hue='predicted_label', data=df, palette=['green', 'red'])
-plt.title('Anomaly Detection with Isolation Forest')
-plt.show()
-```
-
----
-
-### Notes:
-
-* `IsolationForest` is unsupervised: it does not use `label` for training.
-* `anomaly_score` represents the risk score: higher means more likely to be abnormal.
-* Threshold can be tuned depending on desired sensitivity.
-* You can replace `IsolationForest` with `OneClassSVM`, `LocalOutlierFactor`, or `Autoencoder` depending on use case.
-
-
-
-## Flow
-
-1. Train all data(including normal and abnormal)
-
-2. Model tell me some data maybe far
-
-3. Admin check, if is abnormal, remove from train data, else keep it
-
-4. model retrain
+1.  **Initial Training:** The model is trained on all available data (including both normal and potentially abnormal data).
+2.  **Anomaly Identification:** The model identifies and flags data points that appear "far" or anomalous.
+3.  **Admin Review:** An administrator reviews the flagged data points.
+    *   If confirmed as a true anomaly, this information is used to refine the model's understanding of anomalies.
+    *   If it's a false positive (a normal event incorrectly flagged), this feedback helps the model better understand normal behavior.
+4.  **Model Retraining:** The model is retrained using the updated and refined dataset, incorporating the human feedback. This iterative process helps the model adapt to changing data patterns and improve its accuracy over time.
