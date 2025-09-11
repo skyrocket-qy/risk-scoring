@@ -15,30 +15,21 @@ pip install numpy pandas scikit-learn matplotlib seaborn
 ## 2. Generate fake data
 
 ```python
+# user id, role, group, ip, city, region, device gingerprint, time of login, login method, mfa used, 
+# login freq, session duration, failed login attempt, login velocity, new device or ip, 
+# vpn/proxy use, ASN/ISP, browser or OS anomalies
+# Distance from last login location, Time delta from usual login hours, Device churn
+# IP risk score, Embedding of login context
 import numpy as np
 import pandas as pd
 
 # Set seed for reproducibility
 np.random.seed(42)
-
-# Generate 1000 normal events (3 features)
-normal_data = np.random.normal(loc=0, scale=1, size=(1000, 3))
-
-# Generate 20 anomalous events (far from normal)
-anomalies = np.random.normal(loc=5, scale=1, size=(20, 3))
-
-# Combine data
-X = np.vstack([normal_data, anomalies])
-
-# Create DataFrame
-columns = ['feature1', 'feature2', 'feature3']
-df = pd.DataFrame(X, columns=columns)
-df['label'] = [0]*1000 + [1]*20  # 0=normal, 1=anomaly
 ```
 
 ---
 
-## 3. Train an unsupervised model (Isolation Forest)
+## 3. Train an unsupervised models
 
 ```python
 from sklearn.ensemble import IsolationForest
